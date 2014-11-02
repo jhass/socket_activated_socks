@@ -1,0 +1,7 @@
+[Unit]
+Description=Proxy for SOCKS proxy to %host%
+Requires=ssh-socks-proxy_%host%.service
+After=ssh-socks-proxy_%host%.service
+
+[Service]
+ExecStart=/usr/lib/systemd/systemd-socket-proxyd 127.0.0.1:%port%

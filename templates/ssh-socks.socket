@@ -1,0 +1,8 @@
+[Unit]
+Description=Socket for SOCKS proxy to %host%
+
+[Socket]
+ListenStream=127.0.0.1:%port%
+
+[Install]
+WantedBy=sockets.target
