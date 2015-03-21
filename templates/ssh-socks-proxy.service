@@ -2,4 +2,5 @@
 Description=SOCKS proxy to %host%
 
 [Service]
-ExecStart=/usr/bin/ssh -NTD 127.0.0.1:%port% %host%
+Type=forking
+ExecStart=/usr/bin/ssh -o ExitOnForwardFailure=yes -f -NTCD 127.0.0.1:%port% %host%

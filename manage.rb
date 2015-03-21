@@ -1,9 +1,10 @@
 #!/usr/bin/env ruby
-require 'fileutils'
+require "fileutils"
 
-PORT_PREFIX=2380
-XDG_CONFIG_HOME = ENV['XDG_CONFIG_HOME'] || "#{ENV['HOME']}/.config"
-UNIT_DIR="#{XDG_CONFIG_HOME}/systemd/user"
+PORT_PREFIX     = 2380
+XDG_CONFIG_HOME = ENV["XDG_CONFIG_HOME"] || "#{ENV['HOME']}/.config"
+UNIT_DIR        = "#{XDG_CONFIG_HOME}/systemd/user"
+
 FileUtils.mkdir_p UNIT_DIR
 
 class Commander
@@ -11,30 +12,32 @@ class Commander
     help
   end
 
-  def help(*args)
+  def help(*)
     puts "Commands:"
     puts
-    puts "  help\t\t\tthis help text"
-    puts "  add\t[host] [port]\tAdd new config"
-    puts "  list\t\t\tList configs"
-    puts "  remove\t[host]\tRemove config"
-    puts "  stop\t[host,...|all]\tStop hosts"
-    puts "  update\t\t\t Update all hosts"
+    puts "  help   \t \t This help text"
+    puts "  add    [host]\t[port]\t Add new config"
+    puts "  list   \t\t List configs"
+    puts "  remove [host]\t \t Remove config"
+    puts "  status [host]\t \t Show status"
+    puts "  stop   [host,...|all]\t Stop hosts"
+    puts "  update \t \t Update all hosts"
   end
 
   def add(*args)
     return help unless args.size == 2
+
     host, port = args
     proxy_port = "#{PORT_PREFIX}#{port}"
-    proxy_proxy_port = "#{PORT_PREFIX+1}#{port}"
+    proxy_proxy_port = "#{PORT_PREFIX + 1}#{port}"
 
     write_file "ssh-socks.socket", host, proxy_port
     write_file "ssh-socks.service", host, proxy_proxy_port
     write_file "ssh-socks-proxy.service", host, proxy_proxy_port
 
-    systemctl('daemon-reload')
-    systemctl("enable ssh-socks_#{host}.socket")
-    systemctl("start ssh-socks_#{host}.socket")
+    systemctl "daemon-reload"
+    systemctl "enable ssh-socks_#{host}.socket"
+    systemctl "start ssh-socks_#{host}.socket"
 
     puts "Your proxy to #{host} is ready at 127.0.0.1:#{proxy_port}"
   end
@@ -49,45 +52,63 @@ class Commander
   end
 
   def remove(*args)
-    return help unless args.size == 1
-    host = args.first
+    host = parse_host(*args)
 
-    unless File.exists?(path_to('ssh-socks.socket', host))
-      puts "No proxy for #{host} found!"
-      return
-    end
+    systemctl "stop ssh-socks_#{host}.socket"
+    stop host
+    systemctl "disable ssh-socks_#{host}.socket"
+    FileUtils.remove path_to("ssh-socks.socket", host)
+    FileUtils.remove path_to("ssh-socks.service", host)
+    FileUtils.remove path_to("ssh-socks-proxy.service", host)
+  end
 
-    systemctl("stop ssh-socks_#{host}.socket")
-    stop(host)
-    systemctl("disable ssh-socks_#{host}.socket")
-    FileUtils.remove path_to('ssh-socks.socket', host)
-    FileUtils.remove path_to('ssh-socks.service', host)
-    FileUtils.remove path_to('ssh-socks-proxy.service', host)
+  def status(*args)
+    host = parse_host(*args)
+
+    systemctl "status ssh-socks_#{host}.socket"
+    systemctl "status ssh-socks_#{host}.service"
+    systemctl "status ssh-socks-proxy_#{host}.service"
   end
 
   def stop(*args)
     available_hosts = each_host.map(&:first)
-    if args.empty? || args.first == 'all'
+    if args.empty? || args.first == "all"
       hosts = available_hosts
     else
       hosts = available_hosts & args
     end
 
     hosts.each do |host|
-      systemctl("stop ssh-socks-proxy_#{host}.service")
-      systemctl("stop ssh-socks_#{host}.service")
+      systemctl "stop ssh-socks-proxy_#{host}.service"
+      systemctl "stop ssh-socks_#{host}.service"
     end
   end
 
   def update(*args)
     return help unless args.empty?
     each_host do |host, port|
-      remove(host)
-      add(host, port.sub(PORT_PREFIX.to_s, ''))
+      remove host
+      add host, port.sub(PORT_PREFIX.to_s, "")
     end
   end
 
   private
+
+  def parse_host(*args)
+    unless args.size == 1
+      help
+      exit 1
+    end
+
+    host = args.first
+
+    unless File.exist?(path_to("ssh-socks.socket", host))
+      puts "No proxy for #{host} found!"
+      exit 1
+    end
+
+    host
+  end
 
   def write_file name, host, port
     File.write path_to(name, host),
@@ -106,7 +127,7 @@ class Commander
   end
 
   def path_to(name, host)
-    prefix, type = name.split '.'
+    prefix, type = name.split "."
     "#{UNIT_DIR}/#{prefix}_#{host}.#{type}"
   end
 
@@ -115,12 +136,11 @@ class Commander
 
     Dir["#{UNIT_DIR}/ssh-socks_*.socket"].each do |path|
       host = File.basename(path)[/ssh-socks_(.+).socket/, 1]
-      port = File.readlines(path).find {|line| line.start_with? 'ListenStream' }.chomp.split(':')[1]
+      port = File.readlines(path).find {|line| line.start_with? "ListenStream" }.chomp.split(":")[1]
       yield [host, port]
     end
   end
 end
-
 
 commander = Commander.new
 if ARGV.empty?
